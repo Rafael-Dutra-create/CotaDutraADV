@@ -1,0 +1,35 @@
+services:
+  # Desenvolvimento (padrão): Vite + HMR → http://localhost:8080
+  #
+  # O Vite escuta na 8080 *dentro* do container e a porta é publicada 1:1.
+  # Publicar 8080:5173 quebraria o WebSocket do HMR, porque o cliente tentaria
+  # ws://localhost:5173, que não está exposta no host.
+  adv:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      # /mnt/c é 9p e não emite inotify — sem polling o HMR não dispara.
+      VITE_USE_POLLING: '1'
+    # O npm ci só roda quando o volume de node_modules está vazio.
+    command: sh -c "[ -x node_modules/.bin/vite ] || npm ci; npm run dev -- --host 0.0.0.0 --port 8080"
+    ports:
+      - '8080:8080'
+    volumes:
+      - .:/app
+      - adv-node-modules:/app/node_modules
+
+  # Produção (build + nginx), também na 8080:
+  #   docker compose --profile prod up -d --build adv-prod
+  # Não sobe junto com o dev: os dois disputam a porta 8080.
+  adv-prod:
+    profiles: ['prod']
+    build:
+      context: .
+    image: cotadutraadv/landing:latest
+    container_name: adv-prod
+    ports:
+      - '8080:80'
+    restart: unless-stopped
+
+volumes:
+  adv-node-modules:
